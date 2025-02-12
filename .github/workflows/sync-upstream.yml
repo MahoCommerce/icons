@@ -6,23 +6,24 @@ on:
   workflow_dispatch:
 
 jobs:
-  process-icons:
+  sync-upstream:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          sparse-checkout: "icons"
 
-      - name: Configure Sparse Checkout
+      - name: Configure Git
         run: |
           git config core.sparseCheckout true
-          echo "icons/*" >> .git/info/sparse-checkout
+          git remote add source https://github.com/tabler/tabler-icons.git
 
-      - name: Sync From Source
-        run: |
-          git remote add source https://github.com/tabler/tabler-icons.git || true
-          git pull --depth=1 --no-rebase --allow-unrelated-histories --filter=tree:0 source main
+      - name: Fetch Source
+        run: git fetch source main --depth=1
+
+      - name: Checkout Source Files
+        run: git checkout source/main -- icons
 
       - name: Install SVG Optimizer
         run: npm install -g svgo

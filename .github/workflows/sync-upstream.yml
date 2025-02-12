@@ -37,11 +37,19 @@ jobs:
           git add .
           echo "changes_exist=$(git status --porcelain | wc -l | xargs)" >> $GITHUB_OUTPUT
 
+      - name: Generate token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.SYNC_L10N_APP_ID }}
+          private-key: ${{ secrets.SYNC_L10N_APP_PRIVATE_KEY }}
+          owner: MahoCommerce
+
       - name: Create Pull Request
         if: steps.check-changes.outputs.changes_exist != '0'
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ steps.generate_token.outputs.token }}
           commit-message: "Updated icons and minified"
           title: "Icon Update $(date -u '+%Y-%m-%d')"
           body: |

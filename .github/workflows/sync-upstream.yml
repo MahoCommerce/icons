@@ -55,7 +55,7 @@ jobs:
         with:
           token: ${{ steps.generate_token.outputs.token }}
           commit-message: "Updated and modified icons"
-          title: "Icons Update - $(date -u '+%Y-%m-%d %H:%M')"
+          title: "Sync Upstream"
           body: |
             Automated changes include:
             - Latest icons from upstream

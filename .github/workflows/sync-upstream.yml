@@ -1,0 +1,52 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  process-icons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Sparse Checkout
+        run: |
+          git config core.sparseCheckout true
+          echo "icons/*" >> .git/info/sparse-checkout
+
+      - name: Sync From Source
+        run: |
+          git remote add source https://github.com/tabler/tabler-icons.git || true
+          git pull --depth=1 --no-rebase --allow-unrelated-histories --filter=tree:0 source main
+
+      - name: Install SVG Optimizer
+        run: npm install -g svgo
+
+      - name: Process SVG Files
+        run: svgo -rf icons -o icons
+
+      - name: Check for Changes
+        id: check-changes
+        run: |
+          git add .
+          echo "changes_exist=$(git status --porcelain | wc -l | xargs)" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.changes_exist != '0'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          commit-message: "Updated icons and minified"
+          title: "Icon Update $(date -u '+%Y-%m-%d')"
+          body: |
+            Automated changes include:
+            - Latest icons from upstream
+            - SVG optimization using SVGO
+          branch: "icon-updates/$(date +%s)"
+          base: main
+          delete-branch: true

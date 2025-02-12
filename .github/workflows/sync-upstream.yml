@@ -17,13 +17,13 @@ jobs:
       - name: Configure Git
         run: |
           git config core.sparseCheckout true
-          git remote add source https://github.com/tabler/tabler-icons.git
+          git remote add upstream https://github.com/tabler/tabler-icons.git
 
       - name: Fetch Source
-        run: git fetch source main --depth=1
+        run: git fetch upstream main
 
       - name: Checkout Source Files
-        run: git checkout source/main -- icons
+        run: git checkout upstream/main -- icons
 
       - name: Install SVG Optimizer
         run: npm install -g svgo

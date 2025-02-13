@@ -29,7 +29,7 @@ jobs:
         run: npm install -g svgo
 
       - name: Process SVG Files
-        run: svgo -rf icons -o icons
+        run: svgo --config=svgo.config.js -rf icons -o icons
 
       - name: Generate Branch Name
         id: branch

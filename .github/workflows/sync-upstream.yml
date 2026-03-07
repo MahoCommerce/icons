@@ -2,46 +2,96 @@ name: Sync Upstream
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
-  sync-upstream:
+  sync-and-release:
     runs-on: ubuntu-latest
     steps:
+      - name: Get latest upstream release
+        id: upstream
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/tabler/tabler-icons/releases/latest | jq -r '.tag_name | ltrimstr("v")')
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Failed to fetch upstream version"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get our latest tag
+        id: ours
+        run: |
+          OUR_VERSION=$(curl -sf https://api.github.com/repos/MahoCommerce/icons/tags | jq -r '.[0].name')
+          echo "version=$OUR_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if update needed
+        id: check
+        run: |
+          if [ "${{ steps.upstream.outputs.version }}" = "${{ steps.ours.outputs.version }}" ]; then
+            echo "Already in sync (${{ steps.ours.outputs.version }}), skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Update needed: ${{ steps.ours.outputs.version }} → ${{ steps.upstream.outputs.version }}"
+          fi
+
       - name: Checkout Repository
+        if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           sparse-checkout: "icons"
 
       - name: Configure Git
+        if: steps.check.outputs.skip != 'true'
         run: |
           git config core.sparseCheckout true
           git remote add upstream https://github.com/tabler/tabler-icons.git
 
       - name: Fetch Source
+        if: steps.check.outputs.skip != 'true'
         run: git fetch upstream main --depth=1
 
       - name: Checkout Source Files
+        if: steps.check.outputs.skip != 'true'
         run: git checkout upstream/main -- icons
 
       - name: Install SVG Optimizer
+        if: steps.check.outputs.skip != 'true'
         run: npm install -g svgo
 
       - name: Process SVG Files
+        if: steps.check.outputs.skip != 'true'
         run: svgo --config=.svgo.config.js -rf icons -o icons
 
-      - name: Generate Branch Name
-        id: branch
-        run: echo "name=sync-upstream-$(date +%s)" >> $GITHUB_OUTPUT
+      - name: Validate output
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          OUTLINE_COUNT=$(find icons/outline -name '*.svg' | wc -l)
+          FILLED_COUNT=$(find icons/filled -name '*.svg' | wc -l)
+          echo "Outline: $OUTLINE_COUNT, Filled: $FILLED_COUNT"
+          if [ "$OUTLINE_COUNT" -lt 1000 ]; then
+            echo "Too few outline icons ($OUTLINE_COUNT), something went wrong"
+            exit 1
+          fi
+          if [ "$FILLED_COUNT" -lt 500 ]; then
+            echo "Too few filled icons ($FILLED_COUNT), something went wrong"
+            exit 1
+          fi
 
-      - name: Check Changes
+      - name: Check for changes
+        if: steps.check.outputs.skip != 'true'
         id: changes
         run: |
           git add -A
-          echo "has_changes=$(git diff --quiet HEAD || echo 'true')" >> $GITHUB_OUTPUT
+          if git diff --quiet HEAD; then
+            echo "No file changes detected"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate token
+        if: steps.check.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
         id: generate_token
         uses: actions/create-github-app-token@v1
         with:
@@ -49,17 +99,21 @@ jobs:
           private-key: ${{ secrets.SYNC_L10N_APP_PRIVATE_KEY }}
           owner: MahoCommerce
 
-      - name: Create Pull Request
-        if: steps.changes.outputs.has_changes == 'true'
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ steps.generate_token.outputs.token }}
-          commit-message: "Updated and modified icons"
-          title: "Sync Upstream"
-          body: |
-            Automated changes include:
-            - Latest icons from upstream
-            - SVG optimization using SVGO
-          branch: ${{ steps.branch.outputs.name }}
-          base: main
-          delete-branch: true
+      - name: Commit and push
+        if: steps.check.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Updated and modified icons (${{ steps.upstream.outputs.version }})"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+
+      - name: Create tag and release
+        if: steps.check.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
+        run: |
+          gh release create "${{ steps.upstream.outputs.version }}" \
+            --title "${{ steps.upstream.outputs.version }}" \
+            --notes "Synced with [tabler-icons v${{ steps.upstream.outputs.version }}](https://github.com/tabler/tabler-icons/releases/tag/v${{ steps.upstream.outputs.version }})"
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}

@@ -37,7 +37,7 @@ jobs:
 
       - name: Checkout Repository
         if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           sparse-checkout: "icons"
 
@@ -93,7 +93,7 @@ jobs:
       - name: Generate token
         if: steps.check.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
         id: generate_token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.SYNC_L10N_APP_ID }}
           private-key: ${{ secrets.SYNC_L10N_APP_PRIVATE_KEY }}
@@ -113,6 +113,7 @@ jobs:
         if: steps.check.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
         run: |
           gh release create "${{ steps.upstream.outputs.version }}" \
+            --repo "${{ github.repository }}" \
             --title "${{ steps.upstream.outputs.version }}" \
             --notes "Synced with [tabler-icons v${{ steps.upstream.outputs.version }}](https://github.com/tabler/tabler-icons/releases/tag/v${{ steps.upstream.outputs.version }})"
         env:

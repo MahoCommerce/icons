@@ -91,7 +91,7 @@ jobs:
           fi
 
       - name: Generate token
-        if: steps.check.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
+        if: steps.check.outputs.skip != 'true'
         id: generate_token
         uses: actions/create-github-app-token@v2
         with:
@@ -110,7 +110,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
 
       - name: Create tag and release
-        if: steps.check.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
+        if: steps.check.outputs.skip != 'true'
         run: |
           gh release create "${{ steps.upstream.outputs.version }}" \
             --repo "${{ github.repository }}" \
